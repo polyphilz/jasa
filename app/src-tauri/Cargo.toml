@@ -1,0 +1,25 @@
+[package]
+name = "jasa"
+version = "0.1.0"
+description = "Explore research questions as a tree, powered by your local agent CLI"
+edition = "2021"
+
+[lib]
+name = "jasa_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+thiserror = "2"
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+tempfile = "3"

@@ -1,0 +1,96 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/reddit-mono";
+@import "katex/dist/katex.min.css";
+@import "highlight.js/styles/github-dark-dimmed.css";
+
+@plugin '@tailwindcss/typography';
+
+/* Warm dark palette + orange accent, borrowed from dara. */
+@theme {
+  --font-sans: "Reddit Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-mono: "Reddit Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --color-canvas: #191817;
+  --color-surface: #23211f;
+  --color-ink: #f2efe9;
+  --color-muted: #aaa49a;
+  --color-line: rgb(255 255 255 / 0.13);
+  --color-line-strong: rgb(255 255 255 / 0.24);
+  --color-accent: #e0835f;
+  --color-accent-soft: rgb(224 131 95 / 0.12);
+}
+
+@layer components {
+  .jasa-btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-muted disabled:pointer-events-none disabled:opacity-60;
+  }
+  .jasa-btn-primary {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 py-1.5 text-xs font-bold text-white transition-colors hover:border-[#c9744f] hover:bg-[#d47a56] disabled:pointer-events-none disabled:opacity-60;
+  }
+  .jasa-btn-danger {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-surface px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:border-red-400 hover:bg-red-400/10;
+  }
+  .jasa-icon-btn {
+    @apply inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-ink/10 hover:text-ink;
+  }
+  .jasa-input {
+    @apply rounded-lg border border-line bg-surface/60 px-3 py-2 text-sm text-ink placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent-soft focus:outline-none;
+  }
+}
+
+/* --- React Flow theming ------------------------------------------------- */
+
+/* Smooth re-layout when nodes are added; transform is compositor-only. */
+.react-flow__node {
+  transition: transform 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node {
+    transition: none;
+  }
+}
+
+/* Handles exist only to anchor edges; never show them. */
+.jasa-handle {
+  width: 2px;
+  height: 2px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.react-flow__edge .react-flow__edge-path {
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+}
+.jasa-edge-ghost .react-flow__edge-path {
+  stroke: var(--color-line);
+  stroke-dasharray: 5 4;
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.react-flow__controls button {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-muted);
+  fill: var(--color-muted);
+}
+.react-flow__controls button:hover {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  fill: var(--color-ink);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
