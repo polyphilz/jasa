@@ -23,6 +23,13 @@ export type GenerationRequest = {
   effort: string | null;
 };
 
+/** What the agent CLI falls back to when a session doesn't pin model/effort.
+ * Nulls mean the CLI's built-in default, which we can't know. */
+export type CliDefaults = {
+  model: string | null;
+  effort: string | null;
+};
+
 export type Ipc = {
   listSessions(): Promise<SessionMeta[]>;
   loadSession(id: string): Promise<Session>;
@@ -30,6 +37,7 @@ export type Ipc = {
   deleteSession(id: string): Promise<void>;
   startGeneration(request: GenerationRequest): Promise<void>;
   cancelGeneration(nodeId: string): Promise<void>;
+  cliDefaults(): Promise<CliDefaults>;
   onAgentLine(handler: (event: AgentLine) => void): void;
   onAgentExit(handler: (event: AgentExit) => void): void;
 };
@@ -43,6 +51,7 @@ const tauriIpc: Ipc = {
   deleteSession: (id) => invoke("delete_session", { id }),
   startGeneration: (request) => invoke("start_generation", { request }),
   cancelGeneration: (nodeId) => invoke("cancel_generation", { nodeId }),
+  cliDefaults: () => invoke("cli_defaults"),
   onAgentLine: (handler) => {
     void listen<AgentLine>("agent-line", (event) => handler(event.payload));
   },
@@ -156,6 +165,7 @@ const createMockIpc = (): Ipc => {
       }
       return Promise.resolve();
     },
+    cliDefaults: () => Promise.resolve({ model: "claude-fable-5[1m]", effort: "xhigh" }),
     onAgentLine: (handler) => {
       lineHandler = handler;
     },

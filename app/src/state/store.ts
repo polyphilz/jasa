@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { buildPrompt } from "../agent/prompt";
 import { parseAgentLine, splitFollowUps, visibleAnswer } from "../agent/stream";
-import { ipc, type AgentExit, type AgentLine } from "../ipc";
+import { ipc, type AgentExit, type AgentLine, type CliDefaults } from "../ipc";
 import {
   AgentEffort,
   AgentModel,
@@ -30,19 +30,20 @@ type JasaState = {
   sessions: Record<string, Session>;
   currentSessionId: string | null;
   selectedNodeId: string | null;
-  creatingSession: boolean;
+  /** What the agent CLI defaults to when the session doesn't pin a value. */
+  cliDefaults: CliDefaults;
   /** nodeId → markdown streamed so far (marker-stripped), while generating. */
   streams: Record<string, string>;
-  init: () => Promise<void>;
-  showNewSession: () => void;
-  openSession: (id: string) => Promise<void>;
+  /** Resolves with the most recent session id, for the launch redirect. */
+  init: () => Promise<string | null>;
+  openSession: (id: string) => Promise<boolean>;
   createSession: (
     question: string,
     source: string,
     model: AgentModel,
     effort: AgentEffort,
-  ) => Promise<void>;
-  deleteSession: (id: string) => Promise<void>;
+  ) => Promise<string | null>;
+  deleteSession: (id: string) => Promise<boolean>;
   setSessionModel: (sessionId: string, model: AgentModel) => void;
   setSessionEffort: (sessionId: string, effort: AgentEffort) => void;
   selectNode: (nodeId: string | null) => void;
@@ -225,30 +226,27 @@ export const useJasaStore = create<JasaState>()((set, get) => {
     sessions: {},
     currentSessionId: null,
     selectedNodeId: null,
-    creatingSession: false,
+    cliDefaults: { model: null, effort: null },
     streams: {},
 
     init: async () => {
       if (initialized) {
-        return;
+        return null;
       }
       initialized = true;
       ipc.onAgentLine(handleAgentLine);
       ipc.onAgentExit(handleAgentExit);
+      void ipc
+        .cliDefaults()
+        .then((cliDefaults) => set({ cliDefaults }))
+        .catch((error) => console.error("failed to read CLI defaults", error));
       const metas = await ipc.listSessions().catch((error) => {
         console.error("failed to list sessions", error);
         return [] as SessionMeta[];
       });
       set({ metas });
-      const first = metas[0];
-      if (first) {
-        await get().openSession(first.id);
-      } else {
-        set({ creatingSession: true });
-      }
+      return metas[0]?.id ?? null;
     },
-
-    showNewSession: () => set({ creatingSession: true }),
 
     openSession: async (id) => {
       const cached = get().sessions[id];
@@ -256,10 +254,9 @@ export const useJasaStore = create<JasaState>()((set, get) => {
         const root = cached.nodes.find((entry) => entry.parentId === null);
         set({
           currentSessionId: id,
-          creatingSession: false,
           selectedNodeId: root?.id ?? null,
         });
-        return;
+        return true;
       }
       try {
         const session = sanitize(await ipc.loadSession(id));
@@ -267,18 +264,19 @@ export const useJasaStore = create<JasaState>()((set, get) => {
         set((state) => ({
           sessions: { ...state.sessions, [id]: session },
           currentSessionId: id,
-          creatingSession: false,
           selectedNodeId: root?.id ?? null,
         }));
+        return true;
       } catch (error) {
         console.error("failed to open session", error);
+        return false;
       }
     },
 
     createSession: async (question, source, model, effort) => {
       const trimmedQuestion = question.trim();
       if (!trimmedQuestion) {
-        return;
+        return null;
       }
       const timestamp = now();
       const root: QuestionNode = {
@@ -312,12 +310,12 @@ export const useJasaStore = create<JasaState>()((set, get) => {
         metas: [metaOf(session), ...state.metas],
         currentSessionId: session.id,
         selectedNodeId: root.id,
-        creatingSession: false,
       }));
       await ipc
         .saveSession(session)
         .catch((error) => console.error("failed to save session", error));
       generateNode(session.id, root.id);
+      return session.id;
     },
 
     deleteSession: async (id) => {
@@ -332,7 +330,7 @@ export const useJasaStore = create<JasaState>()((set, get) => {
         await ipc.deleteSession(id);
       } catch (error) {
         console.error("failed to delete session", error);
-        return;
+        return false;
       }
       set((state) => {
         const { [id]: _omit, ...sessions } = state.sessions;
@@ -343,9 +341,9 @@ export const useJasaStore = create<JasaState>()((set, get) => {
           metas,
           currentSessionId: wasCurrent ? null : state.currentSessionId,
           selectedNodeId: wasCurrent ? null : state.selectedNodeId,
-          creatingSession: wasCurrent ? true : state.creatingSession,
         };
       });
+      return true;
     },
 
     setSessionModel: (sessionId, model) => {

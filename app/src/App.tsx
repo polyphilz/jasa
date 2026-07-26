@@ -1,45 +1,52 @@
+import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Canvas } from "./components/Canvas";
-import { NewSession } from "./components/NewSession";
-import { ReadingPane } from "./components/ReadingPane";
 import { Sidebar } from "./components/Sidebar";
 import { useJasaStore } from "./state/store";
 
 const App = () => {
-  const init = useJasaStore((state) => state.init);
-  const creatingSession = useJasaStore((state) => state.creatingSession);
-  const session = useJasaStore((state) =>
-    state.currentSessionId ? state.sessions[state.currentSessionId] : undefined,
-  );
-  const selectedNodeId = useJasaStore((state) => state.selectedNodeId);
-  const selectNode = useJasaStore((state) => state.selectNode);
+  const navigate = useNavigate();
+  const router = useRouter();
 
+  // Land on the most recently updated session at launch. Only the initial
+  // "/" is redirected, so deliberate navigation home is never hijacked.
   useEffect(() => {
-    void init();
-  }, [init]);
+    void useJasaStore
+      .getState()
+      .init()
+      .then((recentId) => {
+        if (recentId && router.state.location.pathname === "/") {
+          void navigate({
+            to: "/session/$sessionId",
+            params: { sessionId: recentId },
+            replace: true,
+          });
+        }
+      });
+  }, [navigate, router]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        selectNode(null);
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (event.key === "[") {
+        event.preventDefault();
+        router.history.back();
+      } else if (event.key === "]") {
+        event.preventDefault();
+        router.history.forward();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectNode]);
-
-  const showCanvas = session !== undefined && !creatingSession;
-  const selectedNode = showCanvas
-    ? session.nodes.find((node) => node.id === selectedNodeId)
-    : undefined;
+  }, [router]);
 
   return (
     <div className="flex h-dvh bg-canvas font-sans text-ink">
       <Sidebar />
-      <main className="relative min-w-0 flex-1">
-        {showCanvas ? <Canvas session={session} /> : <NewSession />}
+      <main className="min-w-0 flex-1">
+        <Outlet />
       </main>
-      {selectedNode && <ReadingPane node={selectedNode} />}
     </div>
   );
 };

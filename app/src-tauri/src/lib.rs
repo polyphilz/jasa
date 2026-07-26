@@ -63,6 +63,7 @@ pub fn run() {
             sessions::delete_session,
             agent::start_generation,
             agent::cancel_generation,
+            agent::cli_defaults,
         ])
         .run(tauri::generate_context!())
         .expect("error while running jasa");

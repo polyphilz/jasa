@@ -1,16 +1,9 @@
 import { AlertDialog } from "@base-ui-components/react/alert-dialog";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { effortOptions, modelLabel, modelOptions } from "../lib/agentOptions";
 import { useJasaStore } from "../state/store";
-import { AgentEffort, AgentEffortLabel, AgentModel, AgentModelLabel, type Session } from "../types";
-import { JasaSelect, type JasaSelectOption } from "./JasaSelect";
-
-const MODEL_OPTIONS: readonly JasaSelectOption<AgentModel>[] = Object.values(AgentModel).map(
-  (model) => ({ value: model, label: AgentModelLabel[model] }),
-);
-
-const EFFORT_OPTIONS: readonly JasaSelectOption<AgentEffort>[] = Object.values(AgentEffort).map(
-  (effort) => ({ value: effort, label: AgentEffortLabel[effort] }),
-);
+import { AgentEffort, AgentModel, type Session } from "../types";
+import { JasaSelect } from "./JasaSelect";
 
 /**
  * Per-session model and effort controls shown on the canvas. Switching the
@@ -20,10 +13,14 @@ const EFFORT_OPTIONS: readonly JasaSelectOption<AgentEffort>[] = Object.values(A
 export const SessionControls = ({ session }: { session: Session }) => {
   const setSessionModel = useJasaStore((state) => state.setSessionModel);
   const setSessionEffort = useJasaStore((state) => state.setSessionEffort);
+  const cliDefaults = useJasaStore((state) => state.cliDefaults);
   const [pendingModel, setPendingModel] = useState<AgentModel | null>(null);
   const currentModel = session.model ?? AgentModel.Default;
   const currentEffort = session.effort ?? AgentEffort.Default;
   const hasAnswers = session.nodes.some((node) => node.answer !== "");
+
+  const models = useMemo(() => modelOptions(cliDefaults), [cliDefaults]);
+  const efforts = useMemo(() => effortOptions(cliDefaults), [cliDefaults]);
 
   const requestModelChange = (model: AgentModel) => {
     if (model === currentModel) {
@@ -43,7 +40,7 @@ export const SessionControls = ({ session }: { session: Session }) => {
         ariaLabel="Model"
         value={currentModel}
         onChange={requestModelChange}
-        options={MODEL_OPTIONS}
+        options={models}
       />
       <span className="h-4 w-px bg-line" />
       <span className="text-[11px] font-semibold text-muted">Effort</span>
@@ -51,7 +48,7 @@ export const SessionControls = ({ session }: { session: Session }) => {
         ariaLabel="Effort"
         value={currentEffort}
         onChange={(effort) => setSessionEffort(session.id, effort)}
-        options={EFFORT_OPTIONS}
+        options={efforts}
       />
       <AlertDialog.Root
         open={pendingModel !== null}
@@ -68,10 +65,10 @@ export const SessionControls = ({ session }: { session: Session }) => {
               Switch model mid-session?
             </AlertDialog.Title>
             <AlertDialog.Description className="mt-1.5 text-[13px] text-pretty text-muted">
-              New answers will use {pendingModel ? AgentModelLabel[pendingModel] : ""} instead of{" "}
-              {AgentModelLabel[currentModel]}. The prompt cache is keyed by model, so existing
-              threads lose their cache and follow-ups re-send their full context at uncached rates —
-              expect higher usage until new caches build up.
+              New answers will use {pendingModel ? modelLabel(pendingModel, cliDefaults) : ""}{" "}
+              instead of {modelLabel(currentModel, cliDefaults)}. The prompt cache is keyed by
+              model, so existing threads lose their cache and follow-ups re-send their full context
+              at uncached rates — expect higher usage until new caches build up.
             </AlertDialog.Description>
             <div className="mt-4 flex justify-end gap-2">
               <AlertDialog.Close className="jasa-btn">Cancel</AlertDialog.Close>

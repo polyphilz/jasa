@@ -70,6 +70,40 @@ struct ExitPayload {
     error: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliDefaults {
+    model: Option<String>,
+    effort: Option<String>,
+}
+
+/// What "CLI default" actually resolves to, read from the Claude Code user
+/// settings. Keys absent there fall through to the CLI's built-in defaults,
+/// which vary by version and plan, so they stay None rather than a guess.
+fn read_cli_defaults(settings_path: &std::path::Path) -> CliDefaults {
+    let Ok(text) = std::fs::read_to_string(settings_path) else {
+        return CliDefaults::default();
+    };
+    let Ok(settings) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return CliDefaults::default();
+    };
+    CliDefaults {
+        model: settings["model"].as_str().map(str::to_owned),
+        effort: settings["effortLevel"].as_str().map(str::to_owned),
+    }
+}
+
+#[tauri::command]
+pub fn cli_defaults() -> CliDefaults {
+    let config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".claude")));
+    match config_dir {
+        Some(dir) => read_cli_defaults(&dir.join("settings.json")),
+        None => CliDefaults::default(),
+    }
+}
+
 /// GUI launches don't inherit a login-shell PATH, so probe the usual install
 /// locations before falling back to plain `claude`.
 fn claude_binary() -> PathBuf {
@@ -248,6 +282,30 @@ mod tests {
         assert!(validate_model("").is_err());
         assert!(validate_model("bad model").is_err());
         assert!(validate_model("--dangerously-skip-permissions").is_err());
+    }
+
+    #[test]
+    fn cli_defaults_from_settings_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+
+        assert_eq!(read_cli_defaults(&path), CliDefaults::default());
+
+        std::fs::write(&path, r#"{ "model": "claude-fable-5[1m]", "effortLevel": "xhigh" }"#)
+            .unwrap();
+        assert_eq!(
+            read_cli_defaults(&path),
+            CliDefaults {
+                model: Some("claude-fable-5[1m]".to_owned()),
+                effort: Some("xhigh".to_owned()),
+            }
+        );
+
+        std::fs::write(&path, r#"{ "permissions": {} }"#).unwrap();
+        assert_eq!(read_cli_defaults(&path), CliDefaults::default());
+
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(read_cli_defaults(&path), CliDefaults::default());
     }
 
     #[test]
