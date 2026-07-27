@@ -1,0 +1,111 @@
+name: Release
+
+# Cut a release by pushing a tag that matches the version in
+# app/package.json and app/src-tauri/tauri.conf.json:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The workflow builds a universal (Apple Silicon + Intel) macOS bundle and
+# attaches the .dmg to a *draft* GitHub Release, so nothing goes public until
+# you review and hit publish.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and attach the release to (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macos-latest is Apple Silicon; the universal target cross-compiles the
+    # Intel half from here.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # There is no package.json at the repo root, so point the action at the
+      # one in app/ — it reads the pnpm version from its `packageManager` field.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+
+      # The install instructions differ depending on whether signing secrets are
+      # configured, so build the notes here instead of hardcoding one variant.
+      - name: Compose release notes
+        id: notes
+        env:
+          SIGNED: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            echo '## Install'
+            echo
+            echo 'Download the `.dmg` below, open it, and drag jasa to Applications.'
+            echo
+            if [ "$SIGNED" != "true" ]; then
+              echo 'These builds are **not signed by Apple**. macOS will refuse to open'
+              echo 'the app on first launch ("jasa is damaged and can'"'"'t be opened" — it'
+              echo 'is not). Clear the download quarantine flag once:'
+              echo
+              echo '```sh'
+              echo 'xattr -cr /Applications/jasa.app'
+              echo '```'
+              echo
+            fi
+            echo '## Requires'
+            echo
+            echo '[Claude Code](https://claude.com/claude-code) installed and logged in.'
+            echo 'jasa shells out to the `claude` CLI on your machine and uses your'
+            echo 'existing subscription — no API keys.'
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build, bundle and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing + notarization. All five are optional: with the
+          # secrets unset these expand to empty strings and Tauri produces an
+          # unsigned bundle (users then need `xattr -cr /Applications/jasa.app`).
+          # Add the secrets in repo Settings -> Secrets and variables -> Actions
+          # and this same workflow starts shipping signed, notarized builds with
+          # no edits needed here.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: app
+          args: --target universal-apple-darwin
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: jasa ${{ github.event.inputs.tag || github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
