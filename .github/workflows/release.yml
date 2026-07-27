@@ -55,7 +55,9 @@ jobs:
       - name: Compose release notes
         id: notes
         env:
-          SIGNED: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+          # Keyed off the same secret that selects the build step below, so the
+          # notes can never claim "signed" while an unsigned bundle is attached.
+          SIGNED: ${{ secrets.APPLE_CERTIFICATE != '' }}
         run: |
           {
             echo 'body<<RELEASE_NOTES_EOF'
@@ -81,16 +83,37 @@ jobs:
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build, bundle and draft release
+      # The build is split into two mutually exclusive steps rather than one step
+      # with optional APPLE_* env vars. An unset secret expands to "", but the
+      # variable is still *defined*, and Tauri's bundler tests for presence
+      # rather than emptiness — so APPLE_CERTIFICATE="" reads as "please sign",
+      # and it fails trying to import an empty .p12:
+      #
+      #   security: SecKeychainItemImport: One or more parameters ... not valid
+      #
+      # Defining the vars only on the signed path avoids that entirely.
+
+      - name: Build, bundle and draft release (unsigned)
+        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing + notarization. All five are optional: with the
-          # secrets unset these expand to empty strings and Tauri produces an
-          # unsigned bundle (users then need `xattr -cr /Applications/jasa.app`).
-          # Add the secrets in repo Settings -> Secrets and variables -> Actions
-          # and this same workflow starts shipping signed, notarized builds with
-          # no edits needed here.
+        with:
+          projectPath: app
+          args: --target universal-apple-darwin
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: jasa ${{ github.event.inputs.tag || github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+
+      # Enabled purely by adding the secrets in
+      # Settings -> Secrets and variables -> Actions. No edits needed here.
+      - name: Build, bundle and draft release (signed and notarized)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

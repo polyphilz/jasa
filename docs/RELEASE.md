@@ -104,6 +104,12 @@ lipo -archs app/src-tauri/target/universal-apple-darwin/release/bundle/macos/jas
 
 **`403` creating the release.** Check Settings → Actions → General → Workflow permissions. An org-level restriction on `GITHUB_TOKEN` overrides the workflow's `permissions: contents: write`.
 
+**`failed to import keychain certificate` / `SecKeychainItemImport: One or more parameters passed to a function were not valid`.** Tauri tried to code sign with a certificate it could not read. Either `APPLE_CERTIFICATE` holds something that is not valid base64 of a `.p12`, or `APPLE_CERTIFICATE_PASSWORD` is wrong or missing. Note that Tauri treats the variable as "signing requested" whenever it is *defined*, even if empty — which is why the workflow has separate signed and unsigned build steps instead of passing empty `APPLE_*` values. Regenerate with:
+
+```sh
+base64 -i certificate.p12 | pbcopy
+```
+
 **Release build behaves differently from `pnpm tauri dev`.** Release builds use `app.security.csp` in `tauri.conf.json`; dev uses `devCsp`. A blank window in the packaged app usually means something is blocked by the stricter production policy.
 
 **Data location.** Release builds use the platform app-data directory; dev builds use `app/.data/local`. Override either with `JASA_DATA_DIR`.
