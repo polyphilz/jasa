@@ -51,20 +51,4 @@ pnpm check   # oxlint + oxfmt --check + tsc + vite build
 
 ## Release
 
-Bump the version in **both** `app/package.json` and `app/src-tauri/tauri.conf.json`, then push a matching tag:
-
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-`.github/workflows/release.yml` builds a universal macOS bundle and attaches the `.dmg` to a draft GitHub Release for you to review and publish.
-
-To sign and notarize (removes the `xattr` step for users), add `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` as Actions secrets. The workflow picks them up automatically and drops the quarantine instructions from the release notes.
-
-To build a bundle locally:
-
-```sh
-cd app
-rustup target add x86_64-apple-darwin   # once, for the Intel half
-pnpm tauri build --target universal-apple-darwin
-```
+Push a `v*` tag and CI builds a universal `.dmg` into a draft GitHub Release. See [docs/RELEASE.md](docs/RELEASE.md).

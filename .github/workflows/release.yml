@@ -1,13 +1,9 @@
 name: Release
 
-# Cut a release by pushing a tag that matches the version in
-# app/package.json and app/src-tauri/tauri.conf.json:
+# Builds a universal (Apple Silicon + Intel) macOS bundle and attaches the .dmg
+# to a *draft* GitHub Release, so nothing goes public until you review it.
 #
-#   git tag v0.1.0 && git push origin v0.1.0
-#
-# The workflow builds a universal (Apple Silicon + Intel) macOS bundle and
-# attaches the .dmg to a *draft* GitHub Release, so nothing goes public until
-# you review and hit publish.
+# Full instructions, code signing setup and troubleshooting: docs/RELEASE.md
 on:
   push:
     tags:
