@@ -50,15 +50,32 @@ jobs:
         working-directory: app
         run: pnpm install --frozen-lockfile
 
-      # The install instructions differ depending on whether signing secrets are
+      # The `secrets` context is not available in a step-level `if:`, only in
+      # `env:`. So resolve it once here into an output that later steps can gate
+      # on. Emits "true"/"false" — never the secret itself.
+      - name: Detect signing configuration
+        id: signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The install instructions differ depending on whether signing is
       # configured, so build the notes here instead of hardcoding one variant.
       - name: Compose release notes
         id: notes
         env:
-          # Keyed off the same secret that selects the build step below, so the
-          # notes can never claim "signed" while an unsigned bundle is attached.
-          SIGNED: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          # Same source of truth as the build step selection below, so the notes
+          # can never claim "signed" while an unsigned bundle is attached.
+          SIGNED: ${{ steps.signing.outputs.enabled }}
         run: |
+          # The single quotes are deliberate: the notes are literal markdown and
+          # the backticks in them must not be treated as command substitution.
+          # shellcheck disable=SC2016
           {
             echo 'body<<RELEASE_NOTES_EOF'
             echo '## Install'
@@ -94,7 +111,7 @@ jobs:
       # Defining the vars only on the signed path avoids that entirely.
 
       - name: Build, bundle and draft release (unsigned)
-        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        if: steps.signing.outputs.enabled == 'false'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +127,7 @@ jobs:
       # Enabled purely by adding the secrets in
       # Settings -> Secrets and variables -> Actions. No edits needed here.
       - name: Build, bundle and draft release (signed and notarized)
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: steps.signing.outputs.enabled == 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
